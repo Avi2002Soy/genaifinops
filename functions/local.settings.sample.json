@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=finopsstci01;AccountKey=<YOUR_ACCOUNT_KEY>;EndpointSuffix=core.windows.net",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=<YOUR_INSTRUMENTATION_KEY>;IngestionEndpoint=https://centralindia-0.in.applicationinsights.azure.com/;LiveEndpoint=https://centralindia.livediagnostics.monitor.azure.com/;ApplicationId=<YOUR_APP_ID>",
+    "LOG_ANALYTICS_WORKSPACE_ID": "bbdc79ef-c388-417b-bdef-d3cf4e4665d2",
+    "SQL_CONNECTION_STRING": "Driver={ODBC Driver 18 for SQL Server};Server=tcp:finops-sql-ci01.database.windows.net,1433;Database=finops-db;Uid=finopsadmin;Pwd=<YOUR_PASSWORD>;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=60;",
+    "SQL_USE_MANAGED_IDENTITY": "false",
+    "EVENTHUB_NAME": "llm-telemetry",
+    "EVENTHUB_CONNECTION": "Endpoint=sb://finops-ehns-ci01.servicebus.windows.net/;SharedAccessKeyName=ListenSend;SharedAccessKey=<YOUR_SHARED_ACCESS_KEY>;EntityPath=llm-telemetry",
+    "APIM_RESOURCE_ID": "/subscriptions/c67e23b8-ae8c-44fa-a102-610fe0f400e9/resourceGroups/rg-genai-finops/providers/Microsoft.ApiManagement/service/apim-finops-ci01",
+    "APIM_METRIC_FILTER": "GatewayResponseCode eq '200'",
+    "ALERT_WEBHOOK_URL": "<YOUR_WEBHOOK_URL>"
+  }
+}

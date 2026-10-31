@@ -1,0 +1,20 @@
+{
+  "_note": "ILLUSTRATIVE prices in USD per 1K tokens. Verify against each vendor's current price page before relying on cost figures. To change a price, ADD a new entry for the model with a later effective_from (history stays correctly priced).",
+  "currency": "USD",
+  "effective_from": "2000-01-01",
+  "models": [
+    {"name": "gpt-4",             "provider": "azure-openai", "prompt_per_1k": 0.03,     "completion_per_1k": 0.06,    "fallback": "gpt-3.5-turbo"},
+    {"name": "gpt-3.5-turbo",     "provider": "azure-openai", "prompt_per_1k": 0.0005,   "completion_per_1k": 0.0015},
+    {"name": "gpt-4o",            "provider": "azure-openai", "prompt_per_1k": 0.0025,   "completion_per_1k": 0.01,    "fallback": "gpt-4o-mini"},
+    {"name": "gpt-4o-mini",       "provider": "azure-openai", "prompt_per_1k": 0.00015,  "completion_per_1k": 0.0006},
+    {"name": "gpt-4.1",           "provider": "azure-openai", "prompt_per_1k": 0.002,    "completion_per_1k": 0.008,   "fallback": "gpt-4.1-mini"},
+    {"name": "gpt-4.1-mini",      "provider": "azure-openai", "prompt_per_1k": 0.0004,   "completion_per_1k": 0.0016,  "fallback": "gpt-4.1-nano"},
+    {"name": "gpt-4.1-nano",      "provider": "azure-openai", "prompt_per_1k": 0.0001,   "completion_per_1k": 0.0004},
+    {"name": "claude-3-5-sonnet", "provider": "anthropic",    "prompt_per_1k": 0.003,    "completion_per_1k": 0.015,   "fallback": "claude-3-5-haiku"},
+    {"name": "claude-3-5-haiku",  "provider": "anthropic",    "prompt_per_1k": 0.0008,   "completion_per_1k": 0.004},
+    {"name": "gemini-1.5-pro",    "provider": "google",       "prompt_per_1k": 0.00125,  "completion_per_1k": 0.005,   "fallback": "gemini-1.5-flash"},
+    {"name": "gemini-1.5-flash",  "provider": "google",       "prompt_per_1k": 0.000075, "completion_per_1k": 0.0003},
+    {"name": "mistral-large",     "provider": "mistral",      "prompt_per_1k": 0.002,    "completion_per_1k": 0.006,   "fallback": "mistral-small"},
+    {"name": "mistral-small",     "provider": "mistral",      "prompt_per_1k": 0.0002,   "completion_per_1k": 0.0006}
+  ]
+}

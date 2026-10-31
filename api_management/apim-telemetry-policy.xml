@@ -1,0 +1,65 @@
+<!--
+  LLM token telemetry. Apply at the API (or operation) scope of your Azure OpenAI / LLM backend.
+
+  Changes vs v1:
+  * Never breaks the client call: usage is read with SelectToken (returns null instead of throwing),
+    and only for HTTP 200 JSON responses. Streaming (text/event-stream) and error responses are skipped
+    rather than raising a policy error.
+  * Missing usage is emitted as -1 so the pipeline can COUNT it as malformed (capture-rate metric).
+  * Model name comes from the response body ("model"), falling back to the X-Model-Name header,
+    so a client can't mis-attribute spend by sending a wrong header.
+  * Adds LatencyMs and RequestId (used for latency-aware routing and traceability).
+
+  Requirements: an Application Insights logger on this APIM instance with the diagnostic sampling set to
+  100% (otherwise sampled-out traces look like lost telemetry), and Application Insights must be
+  workspace-based so the data lands in the Log Analytics table AppTraces.
+-->
+<policies>
+    <inbound>
+        <base />
+        <set-variable name="departmentId" value='@{
+            var raw = context.Request.Headers.GetValueOrDefault("X-Department-ID", "").Trim();
+            if (raw.Length == 0) { return "Unknown"; }
+            return raw.Length > 100 ? raw.Substring(0, 100) : raw;
+        }' />
+        <set-variable name="requestedModel" value='@(context.Request.Headers.GetValueOrDefault("X-Model-Name", "unknown"))' />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <choose>
+            <when condition='@(context.Response.StatusCode == 200 &amp;&amp; context.Response.Headers.GetValueOrDefault("Content-Type", "").Contains("application/json"))'>
+                <set-variable name="promptTokens" value='@{
+                    var b = context.Response.Body.As&lt;JObject&gt;(preserveContent: true);
+                    var t = b == null ? null : b.SelectToken("usage.prompt_tokens");
+                    return t == null ? -1L : (long)t;
+                }' />
+                <set-variable name="completionTokens" value='@{
+                    var b = context.Response.Body.As&lt;JObject&gt;(preserveContent: true);
+                    var t = b == null ? null : b.SelectToken("usage.completion_tokens");
+                    return t == null ? -1L : (long)t;
+                }' />
+                <set-variable name="modelName" value='@{
+                    var b = context.Response.Body.As&lt;JObject&gt;(preserveContent: true);
+                    var m = b == null ? null : (string)b.SelectToken("model");
+                    return string.IsNullOrEmpty(m) ? (string)context.Variables["requestedModel"] : m;
+                }' />
+                <!-- Surfaced as customDimensions -> AppTraces.Properties in Log Analytics -->
+                <trace source="GenAIFinOps" severity="information">
+                    <message>LLM Token Telemetry</message>
+                    <metadata name="DepartmentId" value='@((string)context.Variables["departmentId"])' />
+                    <metadata name="ModelName" value='@((string)context.Variables["modelName"])' />
+                    <metadata name="PromptTokens" value='@(((long)context.Variables["promptTokens"]).ToString())' />
+                    <metadata name="CompletionTokens" value='@(((long)context.Variables["completionTokens"]).ToString())' />
+                    <metadata name="LatencyMs" value='@(((long)context.Elapsed.TotalMilliseconds).ToString())' />
+                    <metadata name="RequestId" value='@(context.RequestId.ToString())' />
+                </trace>
+            </when>
+        </choose>
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

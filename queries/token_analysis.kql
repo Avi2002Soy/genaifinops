@@ -1,0 +1,22 @@
+// Ad-hoc copy of the production query in functions/finops/kql.py (USAGE_QUERY).
+// Run it in the Log Analytics workspace's Logs blade. Narrow the time range with the picker.
+AppTraces
+| where Message == "LLM Token Telemetry"
+| extend DepartmentId = tostring(Properties.DepartmentId),
+         ModelName    = tolower(tostring(Properties.ModelName)),
+         Prompt       = tolong(Properties.PromptTokens),
+         Completion   = tolong(Properties.CompletionTokens),
+         LatencyMs    = tolong(Properties.LatencyMs)
+| extend DepartmentId = iff(isempty(DepartmentId), "Unknown", DepartmentId),
+         ModelName    = iff(isempty(ModelName), "unknown", ModelName),
+         Valid        = isnotnull(Prompt) and isnotnull(Completion) and Prompt >= 0 and Completion >= 0
+| extend HasLatency   = Valid and isnotnull(LatencyMs) and LatencyMs >= 0
+| summarize
+    TotalPromptTokens     = sumif(Prompt, Valid),
+    TotalCompletionTokens = sumif(Completion, Valid),
+    RequestCount          = countif(Valid),
+    MalformedCount        = countif(not(Valid)),
+    P95TotalTokens        = percentile(iff(Valid, Prompt + Completion, long(null)), 95),
+    AvgLatencyMs          = avgif(LatencyMs, HasLatency),
+    P95LatencyMs          = percentile(iff(HasLatency, LatencyMs, long(null)), 95)
+  by DepartmentId, ModelName, UsageDate = startofday(TimeGenerated)

@@ -1,0 +1,5 @@
+// Quick look at daily request volume per department, to eyeball spikes before the Python detector flags them.
+AppTraces
+| where Message == "LLM Token Telemetry"
+| summarize Requests = count() by Department = tostring(Properties.DepartmentId), bin(TimeGenerated, 1d)
+| render timechart

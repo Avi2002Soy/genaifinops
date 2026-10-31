@@ -1,0 +1,63 @@
+// Power BI model for the GenAI FinOps report. Connect in IMPORT mode to Azure SQL and load these views:
+//   vw_DailyCost, vw_DepartmentUnitEconomics, vw_LatencyTrend, vw_BudgetStatus, vw_CaptureReconciliation,
+//   vw_RoutingImpact, vw_ProgramImpact, vw_OpenRoutingRecommendations, vw_OpenInefficiencies, vw_LiveToday
+// Create a Date table (Modeling > New table) and relate Date[Date] to vw_DailyCost[UsageDate],
+// vw_LatencyTrend[UsageDate] and vw_CaptureReconciliation[UsageDate] (many-to-one, single direction).
+
+Date = CALENDAR ( DATE ( 2026, 1, 1 ), DATE ( 2027, 12, 31 ) )
+
+// ---------------------------------------------------------------- spend & unit economics
+Total Cost = SUM ( vw_DailyCost[TotalCost] )
+Requests = SUM ( vw_DailyCost[RequestCount] )
+Total Tokens = SUM ( vw_DailyCost[TotalTokens] )
+
+Cost per 1K Requests = DIVIDE ( [Total Cost], [Requests] ) * 1000
+Cost per 1M Tokens   = DIVIDE ( [Total Cost], [Total Tokens] ) * 1000000
+Tokens per Request   = DIVIDE ( [Total Tokens], [Requests] )
+
+Cost MTD  = TOTALMTD ( [Total Cost], 'Date'[Date] )
+Cost PM   = CALCULATE ( [Total Cost], DATEADD ( 'Date'[Date], -1, MONTH ) )
+Cost MoM % = DIVIDE ( [Total Cost] - [Cost PM], [Cost PM] )
+
+Department Share % =
+DIVIDE ( [Total Cost], CALCULATE ( [Total Cost], ALL ( vw_DailyCost[DepartmentId] ) ) )
+
+Unpriced Rows = CALCULATE ( COUNTROWS ( vw_DailyCost ), vw_DailyCost[UnpricedFlag] = TRUE () )
+
+// ---------------------------------------------------------------- latency (request-weighted, never a plain average of averages)
+Avg Latency (ms) =
+DIVIDE (
+    SUMX ( vw_DailyCost, vw_DailyCost[AvgLatencyMs] * vw_DailyCost[RequestCount] ),
+    SUMX ( FILTER ( vw_DailyCost, NOT ISBLANK ( vw_DailyCost[AvgLatencyMs] ) ), vw_DailyCost[RequestCount] )
+)
+// Max of the daily p95 values: a conservative stand-in. A true monthly p95 can't be rebuilt from daily p95s.
+P95 Latency, worst day (ms) = MAX ( vw_DailyCost[P95LatencyMs] )
+
+// ---------------------------------------------------------------- budgets
+Budget Used % = DIVIDE ( SUM ( vw_BudgetStatus[MonthToDateCost] ), SUM ( vw_BudgetStatus[MonthlyBudgetUsd] ) )
+Over Budget Departments = CALCULATE ( COUNTROWS ( vw_BudgetStatus ), vw_BudgetStatus[PctOfBudget] >= 1 )
+
+// ---------------------------------------------------------------- capture reliability (vs. the gateway's own counter)
+Capture Rate (gateway) =
+VAR checked = CALCULATETABLE ( vw_CaptureReconciliation, vw_CaptureReconciliation[Status] IN { "ok", "gap" } )
+RETURN DIVIDE ( SUMX ( checked, [CapturedRequests] ), SUMX ( checked, [GatewayRequests] ) )
+
+Days Meeting 99.9% Target =
+CALCULATE ( COUNTROWS ( vw_CaptureReconciliation ), vw_CaptureReconciliation[MeetsTarget] = TRUE () )
+Days Checked =
+CALCULATE ( COUNTROWS ( vw_CaptureReconciliation ), vw_CaptureReconciliation[Status] IN { "ok", "gap" } )
+Capture SLA Days % = DIVIDE ( [Days Meeting 99.9% Target], [Days Checked] )
+
+// ---------------------------------------------------------------- savings & routing impact (measured, not predicted)
+Realised Savings (USD) = SUM ( vw_ProgramImpact[AvoidedCostUsd] )
+Spend Reduction %      = MAX ( vw_ProgramImpact[SpendReductionPct] ) / 100
+Latency Change %       = MAX ( vw_ProgramImpact[AvgLatencyChangePct] ) / 100   // negative = faster
+Recommendations Measured = MAX ( vw_ProgramImpact[RecommendationsMeasured] )
+
+Open Routing Savings (monthly) = SUM ( vw_OpenRoutingRecommendations[EstMonthlySavings] )
+Open Waste (monthly) =
+CALCULATE ( SUM ( vw_OpenInefficiencies[EstMonthlyWaste] ), vw_OpenInefficiencies[Kind] <> "telemetry_gap" )
+Total Open Opportunity (monthly) = [Open Routing Savings (monthly)] + [Open Waste (monthly)]
+
+// ---------------------------------------------------------------- live tile (needs the hot path; refresh this dataset hourly if used)
+Spend So Far Today = SUM ( vw_LiveToday[TotalCost] )

@@ -1,0 +1,64 @@
+name: Test and deploy to Azure Functions
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["functions/**", "tests/**", "database/pricing_catalog.json", "scripts/**", ".github/workflows/**", "requirements-dev.txt", "pytest.ini"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AZURE_FUNCTIONAPP_NAME: 'finops-func-ci01'            # Replace with your Function App name (dummy example)
+  PYTHON_VERSION: '3.11'                               # Match the Function App's Python version
+
+# Required repository secret (Settings -> Secrets and variables -> Actions):
+#   AZURE_FUNCTIONAPP_PUBLISH_PROFILE = full XML of the Function App's publish profile, e.g.
+#     <publishData><publishProfile profileName="finops-func-ci01 - Zip Deploy" publishMethod="ZipDeploy"
+#       userName="$finops-func-ci01" userPWD="2CLspBabSkNjwo8GcjCzYUsQ0u1QuwuOS1V9x17Nxg3w2kBaPMsESSadGcUX" ... /></publishData>
+#   (dummy value; the real one comes from Function App -> Get publish profile)
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements-dev.txt
+      - name: Run unit tests
+        run: python -m pytest -q
+      - name: Validate pricing catalog
+        run: python scripts/load_pricing.py --dry-run
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies into the deployment package
+        shell: bash
+        run: |
+          pushd './functions'
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --target=".python_packages/lib/site-packages"
+          popd
+      - name: Deploy
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: './functions'
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          scm-do-build-during-deployment: false
+          enable-oryx-build: false

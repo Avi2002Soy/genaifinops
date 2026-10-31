@@ -1,0 +1,6 @@
+// How close are we to the 5 GB/month free Log Analytics allowance? Which tables are the heavy ones?
+Usage
+| where TimeGenerated > startofmonth(now())
+| where IsBillable == true
+| summarize BillableGB = round(sum(Quantity) / 1024, 3) by DataType
+| order by BillableGB desc
